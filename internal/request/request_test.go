@@ -99,3 +99,19 @@ func TestRequestLineParse(t *testing.T) {
 	_, err = RequestFromReader(reader)
 	require.Error(t, err)
 }
+
+func TestRequestLineParseConsumption(t *testing.T) {
+	// Test: Good GET request consumption
+	r := Request{state: Initialized}
+	data := []byte("GET /coffee HTTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n")
+	n, err := r.parse(data)
+	require.NoError(t, err)
+	assert.Equal(t, 22, n)
+
+	// Test: Bad request consumption 0
+	r = Request{state: Initialized}
+	data = []byte("GET / GET HTTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n")
+	n, err = r.parse(data)
+	require.Error(t, err)
+	assert.Equal(t, 0, n)
+}

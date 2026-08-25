@@ -108,7 +108,7 @@ func parseRequestLine(data []byte) (RequestLine, int, error) {
 		HttpVersion:   httpVersion,
 	}
 
-	return requestLine, len(requestParts[0]), nil
+	return requestLine, len(requestParts[0]) + 2, nil
 }
 
 func isAllUpper(s string) bool {
