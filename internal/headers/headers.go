@@ -29,7 +29,6 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 		return 0, false, errors.New("error: invalid header format")
 	}
 
-	header = strings.ToLower(header)
 	header = strings.ReplaceAll(header, " ", "")
 	headerParts := strings.SplitN(header, ":", 2)
 
@@ -40,6 +39,7 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	if match {
 		return 0, false, errors.New("error header has invalid character")
 	}
+	headerParts[0] = strings.ToLower(headerParts[0])
 
 	h[headerParts[0]] = headerParts[1]
 	return len(parts[0]) + 2, false, nil
