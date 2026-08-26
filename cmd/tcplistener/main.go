@@ -23,13 +23,17 @@ func main() {
 		}
 		fmt.Println("connection accepted")
 
-		requestLine, err := request.RequestFromReader(conn)
+		r, err := request.RequestFromReader(conn)
 		conn.Close()
 		if err != nil {
 			log.Printf("error reading from connection: %v\n", err)
 			continue
 		}
-		fmt.Printf("Request line:\n- Method: %s\n- Target: %s\n- Version: %s\n", requestLine.RequestLine.Method, requestLine.RequestLine.RequestTarget, requestLine.RequestLine.HttpVersion)
+		fmt.Printf("Request line:\n- Method: %s\n- Target: %s\n- Version: %s\n", r.RequestLine.Method, r.RequestLine.RequestTarget, r.RequestLine.HttpVersion)
+		fmt.Printf("Headers:\n")
+		for k, v := range r.Headers {
+			fmt.Printf("- %s: %s\n", k, v)
+		}
 		fmt.Println("connection closed")
 	}
 }

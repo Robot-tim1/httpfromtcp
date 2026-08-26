@@ -5,11 +5,14 @@ import (
 	"errors"
 	"io"
 	"strings"
+
+	"github.com/Robot-tim1/httpfromtcp/internal/headers"
 )
 
 type Request struct {
 	RequestLine RequestLine
-	state       int
+	Headers     headers.Headers
+	State       int
 }
 
 type RequestLine struct {
@@ -19,19 +22,20 @@ type RequestLine struct {
 }
 
 const (
-	Initialized int = iota // 0
-	Done                   // 1
+	RequestLineParse int = iota // 0
+	HeaderParse                 // 1
+	Done                        // 2
 )
 
 const bufferSize = 8
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
-	request := Request{state: Initialized}
+	request := Request{State: RequestLineParse, Headers: headers.NewHeaders()}
 	buf := make([]byte, bufferSize)
 	readToIndex := 0
 
-	for request.state != Done {
-		if len(buf) == cap(buf) {
+	for request.State != Done {
+		if readToIndex >= cap(buf) {
 			newBuf := make([]byte, cap(buf)*2)
 			copy(newBuf, buf)
 			buf = newBuf
@@ -39,10 +43,16 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		n, err := reader.Read(buf[readToIndex:])
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				request.state = Done
+				if !bytes.Contains(buf, []byte("\r\n\r\n")) {
+					return nil, errors.New("error missing end of headers")
+				}
+				request.State = Done
 				break
 			}
 			return nil, err
+		}
+		if request.State == HeaderParse && len(buf) > 8192 && !bytes.Contains(buf, []byte("\r\n\r\n")) {
+			return nil, errors.New("error Header Fields Too Large")
 		}
 		readToIndex += n
 		m, err := request.parse(buf[:readToIndex])
@@ -62,8 +72,23 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 }
 
 func (r *Request) parse(data []byte) (int, error) {
-	switch r.state {
-	case Initialized:
+	totalBytesParsed := 0
+	for r.State != Done {
+		n, err := r.parseSingle(data[totalBytesParsed:])
+		if err != nil {
+			return 0, err
+		}
+		if n == 0 {
+			return totalBytesParsed, nil
+		}
+		totalBytesParsed += n
+	}
+	return totalBytesParsed, nil
+}
+
+func (r *Request) parseSingle(data []byte) (int, error) {
+	switch r.State {
+	case RequestLineParse:
 		requestLine, n, err := parseRequestLine(data)
 		if err != nil {
 			return 0, err
@@ -72,12 +97,22 @@ func (r *Request) parse(data []byte) (int, error) {
 			return 0, nil
 		}
 		r.RequestLine = requestLine
-		r.state = Done
+		r.State = HeaderParse
+		return n, nil
+	case HeaderParse:
+		n, done, err := r.Headers.Parse(data)
+		if err != nil {
+			return 0, err
+		}
+		if !done {
+			return n, nil
+		}
+		r.State = Done
 		return n, nil
 	case Done:
-		return 0, errors.New("error: trying to read data in a done state")
+		return 0, errors.New("error: trying to read data in a done State")
 	default:
-		return 0, errors.New("error: unknown state")
+		return 0, errors.New("error: unknown State")
 	}
 }
 
@@ -97,7 +132,7 @@ func parseRequestLine(data []byte) (RequestLine, int, error) {
 		return RequestLine{}, 0, errors.New("method is invalid")
 	}
 
-	httpVersion := strings.Split(parts[2], "/")[1]
+	_, httpVersion, _ := strings.Cut(parts[2], "/")
 	if !strings.Contains(httpVersion, "1.1") {
 		return RequestLine{}, 0, errors.New("http version is not 1.1")
 	}
