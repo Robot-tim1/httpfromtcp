@@ -3,6 +3,8 @@ package headers
 import (
 	"bytes"
 	"errors"
+	"log"
+	"regexp"
 	"strings"
 )
 
@@ -24,11 +26,21 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 
 	header := string(parts[0])
 	if !strings.Contains(strings.Split(header, " ")[0], ":") {
-		return 0, false, errors.New("error: invalied header format")
+		return 0, false, errors.New("error: invalid header format")
 	}
 
+	header = strings.ToLower(header)
 	header = strings.ReplaceAll(header, " ", "")
 	headerParts := strings.SplitN(header, ":", 2)
+
+	match, err := regexp.MatchString("([^A-Za-z0-9!#-'+*"+regexp.QuoteMeta("-")+".^_`|~])", headerParts[0])
+	if err != nil {
+		log.Fatalf("error regex failure: %v", err)
+	}
+	if match {
+		return 0, false, errors.New("error header has invalid character")
+	}
+
 	h[headerParts[0]] = headerParts[1]
 	return len(parts[0]) + 2, false, nil
 }
