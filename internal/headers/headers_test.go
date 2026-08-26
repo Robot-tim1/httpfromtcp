@@ -28,8 +28,8 @@ func TestHeaderParse(t *testing.T) {
 	assert.Equal(t, 36, n)
 	assert.False(t, done)
 
-	// Test: Valid 2 headers with existing headers
-	data = []byte("Content-length: 200\r\nHeader-header:header\r\n\r\n")
+	// Test: Valid 2 headers with existing headers and multiple values
+	data = []byte("Content-length: 200\r\nhost:finland\r\n\r\n")
 	n, done, err = headers.Parse(data)
 	require.NoError(t, err)
 	assert.Equal(t, "200", headers["content-length"])
@@ -38,10 +38,9 @@ func TestHeaderParse(t *testing.T) {
 	data = data[n:]
 	n, done, err = headers.Parse(data)
 	require.NoError(t, err)
-	assert.Equal(t, "localhost:42069", headers["host"])
+	assert.Equal(t, "localhost:42069, finland", headers["host"])
 	assert.Equal(t, "200", headers["content-length"])
-	assert.Equal(t, "header", headers["header-header"])
-	assert.Equal(t, 22, n)
+	assert.Equal(t, 14, n)
 	assert.False(t, done)
 
 	// Test: Valid done

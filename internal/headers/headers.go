@@ -39,7 +39,12 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	if match {
 		return 0, false, errors.New("error header has invalid character")
 	}
+
 	headerParts[0] = strings.ToLower(headerParts[0])
+	if val, ok := h[headerParts[0]]; ok {
+		h[headerParts[0]] = val + ", " + headerParts[1]
+		return len(parts[0]) + 2, false, nil
+	}
 
 	h[headerParts[0]] = headerParts[1]
 	return len(parts[0]) + 2, false, nil
