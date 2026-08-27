@@ -14,6 +14,13 @@ func NewHeaders() Headers {
 	return make(Headers)
 }
 
+func (h Headers) Get(key string) string {
+	if val, ok := h[strings.ToLower(key)]; ok {
+		return val
+	}
+	return ""
+}
+
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	if bytes.HasPrefix(data, []byte("\r\n")) {
 		return 2, true, nil

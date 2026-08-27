@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/Robot-tim1/httpfromtcp/internal/headers"
@@ -12,6 +13,7 @@ import (
 type Request struct {
 	RequestLine RequestLine
 	Headers     headers.Headers
+	Body        []byte
 	State       int
 }
 
@@ -24,7 +26,8 @@ type RequestLine struct {
 const (
 	RequestLineParse int = iota // 0
 	HeaderParse                 // 1
-	Done                        // 2
+	BodyParse                   // 2
+	Done                        // 3
 )
 
 const bufferSize = 8
@@ -43,8 +46,11 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		n, err := reader.Read(buf[readToIndex:])
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				if !bytes.Contains(buf, []byte("\r\n\r\n")) {
+				if request.State == HeaderParse {
 					return nil, errors.New("error missing end of headers")
+				}
+				if request.State == BodyParse {
+					return nil, errors.New("error body length shorter than stated content=length")
 				}
 				request.State = Done
 				break
@@ -107,8 +113,30 @@ func (r *Request) parseSingle(data []byte) (int, error) {
 		if !done {
 			return n, nil
 		}
-		r.State = Done
+		r.State = BodyParse
 		return n, nil
+	case BodyParse:
+		contentLength := r.Headers.Get("Content-length")
+		if contentLength == "" {
+			r.State = Done
+			return 0, nil
+		}
+		length, err := strconv.Atoi(contentLength)
+		if err != nil {
+			return 0, err
+		}
+		if length == 0 {
+			r.State = Done
+			return 0, nil
+		}
+		r.Body = append(r.Body, data...)
+		if len(r.Body) > length {
+			return 0, errors.New("error body length longer than stated content-length")
+		}
+		if len(r.Body) == length {
+			r.State = Done
+		}
+		return len(data), nil
 	case Done:
 		return 0, errors.New("error: trying to read data in a done State")
 	default:
