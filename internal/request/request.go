@@ -129,6 +129,9 @@ func (r *Request) parseSingle(data []byte) (int, error) {
 			r.State = Done
 			return 0, nil
 		}
+		if len(data) == 0 {
+			return 0, nil
+		}
 		r.Body = append(r.Body, data...)
 		if len(r.Body) > length {
 			return 0, errors.New("error body length longer than stated content-length")
