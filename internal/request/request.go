@@ -121,16 +121,16 @@ func (r *Request) parseSingle(data []byte) (int, error) {
 			r.State = Done
 			return 0, nil
 		}
-		length, err := strconv.Atoi(contentLength)
-		if err != nil {
-			return 0, err
-		}
-		if length == 0 {
+		if contentLength == "0" {
 			r.State = Done
 			return 0, nil
 		}
 		if len(data) == 0 {
 			return 0, nil
+		}
+		length, err := strconv.Atoi(contentLength)
+		if err != nil {
+			return 0, err
 		}
 		r.Body = append(r.Body, data...)
 		if len(r.Body) > length {
