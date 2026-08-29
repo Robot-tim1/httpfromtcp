@@ -1,9 +1,7 @@
 package server
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"sync"
@@ -26,7 +24,7 @@ type HandlerError struct {
 	Message string
 }
 
-type Handler func(w io.Writer, req *request.Request) *HandlerError
+type Handler func(w *response.Writer, req *request.Request)
 
 func Serve(port int, handler Handler) (*Server, error) {
 	l, err := net.Listen("tcp", ":"+fmt.Sprint(port))
@@ -62,50 +60,33 @@ func (s *Server) listen() {
 	}
 }
 
-func (h *HandlerError) Write(w io.Writer) {
-	err := response.WriteStatusLine(w, h.Code)
+func (h *HandlerError) Write(w *response.Writer) {
+	err := w.WriteStatusLine(h.Code)
 	if err != nil {
 		log.Printf("error writing status line for error response: %v", err)
 		return
 	}
 	header := response.GetDefaultHeaders(len(h.Message))
-	err = response.WriteHeaders(w, header)
+	err = w.WriteHeaders(header)
 	if err != nil {
 		log.Printf("error writing headers for error response: %v", err)
 		return
 	}
-	w.Write([]byte(h.Message))
+	w.WriteBody([]byte(h.Message))
 }
 
 func (s *Server) handle(conn net.Conn) {
 	defer s.handlerTracker.Done()
 	defer conn.Close()
 
+	w := response.NewWriter(conn)
+
 	req, err := request.RequestFromReader(conn)
 	if err != nil {
 		hErr := HandlerError{Code: response.StatusBadRequest, Message: err.Error()}
-		hErr.Write(conn)
+		hErr.Write(w)
 		return
 	}
 
-	buf := bytes.NewBuffer(make([]byte, 0))
-	hErr := s.handler(buf, req)
-	if hErr != nil {
-		hErr.Write(conn)
-		return
-	}
-
-	err = response.WriteStatusLine(conn, response.StatusOk)
-	if err != nil {
-		log.Printf("error writing status line for response: %v", err)
-		return
-	}
-
-	h := response.GetDefaultHeaders(buf.Len())
-	err = response.WriteHeaders(conn, h)
-	if err != nil {
-		log.Printf("error writing headers for error response: %v", err)
-		return
-	}
-	conn.Write(buf.Bytes())
+	s.handler(w, req)
 }

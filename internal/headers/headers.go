@@ -21,6 +21,10 @@ func (h Headers) Get(key string) string {
 	return ""
 }
 
+func (h Headers) AddHeader(key, val string) {
+	h[strings.ToLower(key)] = val
+}
+
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	if bytes.HasPrefix(data, []byte("\r\n")) {
 		return 2, true, nil
