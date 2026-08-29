@@ -19,7 +19,8 @@ const (
 type WriterStatus int
 
 const (
-	writeHeaders WriterStatus = iota
+	writeStatusLine WriterStatus = iota
+	writeHeaders
 	writeBody
 )
 
@@ -33,6 +34,9 @@ func NewWriter(w io.Writer) *Writer {
 }
 
 func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
+	if w.writerState != writeStatusLine {
+		return errors.New("error write out of order")
+	}
 	var err error
 	switch statusCode {
 	case StatusOk:
