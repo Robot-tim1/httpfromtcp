@@ -22,6 +22,7 @@ const (
 	writeStatusLine WriterStatus = iota
 	writeHeaders
 	writeBody
+	writeTrailers
 )
 
 type Writer struct {
@@ -30,7 +31,7 @@ type Writer struct {
 }
 
 func NewWriter(w io.Writer) *Writer {
-	return &Writer{writer: w, writerState: -1}
+	return &Writer{writer: w, writerState: writeStatusLine}
 }
 
 func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
@@ -78,4 +79,38 @@ func (w *Writer) WriteBody(p []byte) (int, error) {
 		return 0, errors.New("error write out of order")
 	}
 	return w.writer.Write(p)
+}
+
+func (w *Writer) WriteChunkedBody(p []byte) (int, error) {
+	if w.writerState != writeBody {
+		return 0, errors.New("error write out of order")
+	}
+	n, err := fmt.Fprintf(w.writer, "%X\r\n", len(p))
+	if err != nil {
+		return 0, err
+	}
+	m, err := fmt.Fprintf(w.writer, "%s\r\n", p)
+	if err != nil {
+		return 0, err
+	}
+	return n + m, nil
+}
+
+func (w *Writer) WriteChunkedBodyDone() (int, error) {
+	w.writerState = writeTrailers
+	return w.writer.Write([]byte("0\r\n"))
+}
+
+func (w *Writer) WriteTrailers(headers headers.Headers) error {
+	if w.writerState != writeTrailers {
+		return errors.New("error write out of order")
+	}
+	for k, v := range headers {
+		_, err := fmt.Fprintf(w.writer, "%s: %s\r\n", k, v)
+		if err != nil {
+			return err
+		}
+	}
+	w.writer.Write([]byte("\r\n"))
+	return nil
 }
