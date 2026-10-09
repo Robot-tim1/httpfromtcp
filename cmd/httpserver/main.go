@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -61,6 +60,57 @@ func videoHandler(w *response.Writer, r *request.Request) {
 	w.WriteHeaders(response.GetDefaultHeaders(0))
 }
 
+func testHandler(w *response.Writer, r *request.Request) {
+	if strings.HasPrefix(r.RequestLine.RequestTarget, "/yourproblem") {
+		w.WriteStatusLine(response.StatusBadRequest)
+		body := `<html>
+  <head>
+    <title>400 Bad Request</title>
+  </head>
+  <body>
+    <h1>Bad Request</h1>
+    <p>Your request honestly kinda sucked.</p>
+  </body>
+</html>`
+		h := response.GetDefaultHeaders(len(body))
+		h.AddHeader("Content-Type", "text/html")
+		w.WriteHeaders(h)
+		w.WriteBody([]byte(body))
+		return
+	}
+	if strings.HasPrefix(r.RequestLine.RequestTarget, "/myproblem") {
+		w.WriteStatusLine(response.StatusServerError)
+		body := `<html>
+  <head>
+    <title>500 Internal Server Error</title>
+  </head>
+  <body>
+    <h1>Internal Server Error</h1>
+    <p>Okay, you know what? This one is on me.</p>
+  </body>
+</html>`
+		h := response.GetDefaultHeaders(len(body))
+		h.AddHeader("Content-Type", "text/html")
+		w.WriteHeaders(h)
+		w.WriteBody([]byte(body))
+		return
+	}
+	w.WriteStatusLine(response.StatusOk)
+	body := `<html>
+  <head>
+    <title>200 OK</title>
+  </head>
+  <body>
+    <h1>Success!</h1>
+    <p>Your request was an absolute banger.</p>
+  </body>
+</html>`
+	h := response.GetDefaultHeaders(len(body))
+	h.AddHeader("Content-Type", "text/html")
+	w.WriteHeaders(h)
+	w.WriteBody([]byte(body))
+}
+
 func handler(w *response.Writer, r *request.Request) {
 	if strings.HasPrefix(r.RequestLine.RequestTarget, "/httpbin/") {
 		requestPath := strings.TrimPrefix(r.RequestLine.RequestTarget, "/httpbin/")
@@ -80,16 +130,22 @@ func handler(w *response.Writer, r *request.Request) {
 		h.AddHeader("Trailer", "X-Content-SHA256, X-Content-Length")
 		w.WriteHeaders(h)
 		buf := make([]byte, 1024)
-		fullResponse := make([]byte, 1024)
+		fullResponse := make([]byte, 0, 1024)
 		for {
 			n, err := resp.Body.Read(buf)
 			if err != nil {
-				if errors.Is(err, io.EOF) {
+				if err == io.EOF {
+					_, err = w.WriteChunkedBody(buf[:n])
+					if err != nil {
+						log.Fatalln(err)
+					}
+					fullResponse = append(fullResponse, buf[:n]...)
+
 					w.WriteChunkedBodyDone()
 					trailers := headers.NewHeaders()
 					hash := sha256.Sum256(fullResponse)
 					trailers.AddHeader("X-Content-SHA256", hex.EncodeToString(hash[:]))
-					trailers.AddHeader("X-Content-Length", fmt.Sprint(len(hash)))
+					trailers.AddHeader("X-Content-Length", fmt.Sprint(len(fullResponse)))
 					err = w.WriteTrailers(trailers)
 					if err != nil {
 						log.Fatalln(err)
